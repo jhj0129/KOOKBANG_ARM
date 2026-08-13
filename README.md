@@ -138,6 +138,8 @@ drokck
 
 가 표시됩니다.
 
+---
+
 ## 4-2. DROK ARM 실제 팔 코드
 
 별도 workspace로 설치합니다.
@@ -214,6 +216,8 @@ bash ~/DROK_ARM_IK/tools/run_real.sh
 
 이 터미널은 계속 켜둡니다.
 
+---
+
 ## Terminal 2 - ARM 자동 파지 노드
 
 대회 전 반드시 CAMERA MODE인지 확인합니다.
@@ -241,7 +245,15 @@ bash ~/DROK_ARM_IK/tools/run_drok_auto_grasp_prototype1.sh
 
 대회에서는 수동 trigger script를 실행하지 않습니다.
 
-Summer가 `supply_box`를 검출하면 자동으로 `/drok_arm_auto/enable = True`를 발행합니다.
+Summer가 `supply_box`를 검출하면 자동으로:
+
+```text
+/drok_arm_auto/enable = True
+```
+
+를 발행합니다.
+
+---
 
 ## Terminal 3 - YOLO + 중심 XYZ
 
@@ -257,19 +269,28 @@ ros2 topic echo /yolo_detected_object --once
 ros2 topic echo /yolo_object_xyz --once
 ```
 
-`supply_box` 검출 시 class와 같은 물체의 중심 3D 좌표가 함께 들어와야 합니다.
+`supply_box` 검출 시 예:
+
+```text
+/yolo_detected_object
+data: supply_box
+```
+
+그리고 같은 물체의 중심 3D 좌표가 `/yolo_object_xyz`로 들어와야 합니다.
+
+---
 
 ## Terminal 4 - Camera -> Robot TF
 
 ARM은 YOLO의 `camera_link` 좌표를 `ARM_BASE_LINK` 좌표로 변환해서 IK에 사용합니다.
 
-반드시 다음 TF가 존재해야 합니다.
+따라서 반드시 다음 TF가 존재해야 합니다.
 
 ```text
 ARM_BASE_LINK -> camera_link
 ```
 
-현재 translation baseline:
+현재 사용 중인 translation baseline:
 
 ```text
 x = -0.400 m
@@ -278,6 +299,9 @@ z = +0.470 m
 ```
 
 단, **카메라 회전 roll / pitch / yaw는 실제 장착 방향을 측정한 최종값을 사용해야 합니다.**
+회전값이 확정되지 않은 상태에서 대회 파지를 수행하면 XYZ 변환이 틀어질 수 있습니다.
+
+형식:
 
 ```bash
 ros2 run tf2_ros static_transform_publisher \
@@ -297,6 +321,8 @@ TF 확인:
 ros2 run tf2_ros tf2_echo ARM_BASE_LINK camera_link
 ```
 
+---
+
 ## Terminal 5 - Summer Node
 
 ```bash
@@ -308,9 +334,13 @@ source ~/KOOKBANG_ARM/install/setup.bash
 ros2 run drokck summer_node
 ```
 
+이후 Summer 노드가 자동으로 차체/팔 handshake를 수행합니다.
+
 ---
 
 # 7. 실제 자동 동작 순서
+
+정상적인 Summer 미션은 다음 순서입니다.
 
 ```text
 1. 차량 주행
@@ -343,7 +373,7 @@ ros2 run drokck summer_node
 ~/KOOKBANG_ARM/src/drokck/summer_node.cpp
 ```
 
-## 차체 정지 후 ARM 시작 대기시간
+## 8-1. 차체 정지 후 ARM 시작 대기시간
 
 현재:
 
@@ -351,11 +381,36 @@ ros2 run drokck summer_node
 static constexpr double ARM_CHASSIS_SETTLE_SEC = 0.5;
 ```
 
+의미:
+
+```text
+supply_box 검출
+-> chassis STOP
+-> 0.5초 기다림
+-> ARM enable
+```
+
 차량 관성이 크면 값을 늘립니다.
 
-## Summer 주행 속도
+예:
 
-Summer는 기본적으로 `/cmd_vel_nav`를 받아 `/cmd_vel`로 전달합니다. 따라서 기본 주행속도는 navigation 쪽에서 조절합니다.
+```cpp
+static constexpr double ARM_CHASSIS_SETTLE_SEC = 1.0;
+```
+
+---
+
+## 8-2. Summer 주행 속도
+
+Summer는 기본적으로 자체 기준속도를 생성하지 않고:
+
+```text
+/cmd_vel_nav
+```
+
+를 받아 `/cmd_vel`로 전달합니다.
+
+따라서 **기본 주행속도는 navigation 쪽에서 조절**합니다.
 
 Summer 코드에는 다음 IMU 기반 배율 로직이 있습니다.
 
@@ -374,6 +429,16 @@ IMU threshold = 0.1
 linear speed multiplier = 2.0
 ```
 
+배율을 낮추려면:
+
+```cpp
+out_msg.linear.x *= 1.5;
+```
+
+처럼 수정합니다.
+
+주의: ARM 작업 중에는 `/cmd_vel=0`이므로 이 배율 로직으로 차체가 움직이지 않습니다.
+
 ---
 
 # 9. ARM에서 수정 가능한 위치 파라미터
@@ -384,7 +449,7 @@ linear speed multiplier = 2.0
 ~/DROK_ARM_IK/tools/drok_auto_grasp_prototype1.py
 ```
 
-## 대회 / 연습 모드
+## 9-1. 대회 / 연습 모드
 
 ```python
 USE_FIXED_PRACTICE_TARGET = False
@@ -397,7 +462,9 @@ True  = 고정 연습좌표 사용
 
 대회에서는 `False`.
 
-## 로봇 기준 위치 오프셋
+---
+
+## 9-2. 로봇 기준 위치 오프셋
 
 ```python
 ROBOT_OFFSET_FORWARD_CM = 0.0
@@ -413,13 +480,24 @@ RIGHT   + : ARM_BASE_LINK -Y
 UP      + : ARM_BASE_LINK +Z
 ```
 
-예를 들어 실제 그리퍼가 검출점보다 항상 2 cm 왼쪽에 도착하면:
+예를 들어 실제 그리퍼가 검출점보다 항상 2 cm 왼쪽에 도착해서
+오른쪽으로 2 cm 보정하고 싶다면:
 
 ```python
 ROBOT_OFFSET_RIGHT_CM = 2.0
 ```
 
-## 연습용 고정좌표
+실제보다 1.5 cm 낮게 도착한다면:
+
+```python
+ROBOT_OFFSET_UP_CM = 1.5
+```
+
+---
+
+## 9-3. 연습용 고정좌표
+
+대회에서는 사용하지 않지만 테스트할 때:
 
 ```python
 FIXED_GRASP_X_M = 0.4000
@@ -427,7 +505,11 @@ FIXED_GRASP_Y_M = 0.0000
 FIXED_GRASP_Z_M = -0.1000
 ```
 
-## YOLO 좌표 안정화
+---
+
+## 9-4. YOLO 좌표 안정화
+
+현재:
 
 ```python
 REQUIRED_SAMPLES = 5
@@ -435,16 +517,37 @@ SAMPLE_WINDOW_SEC = 1.0
 MAX_MEDIAN_DEVIATION_M = 0.08
 ```
 
-## 허용 작업공간
+의미:
+
+```text
+REQUIRED_SAMPLES
+= IK 실행 전 사용할 좌표 sample 수
+
+SAMPLE_WINDOW_SEC
+= sample 수집 시간 범위
+
+MAX_MEDIAN_DEVIATION_M
+= 중앙값에서 허용할 최대 좌표 편차
+```
+
+Depth가 많이 흔들리면 sample 수를 증가시키는 방향으로 튜닝할 수 있습니다.
+
+---
+
+## 9-5. 허용 작업공간
 
 ```python
 WORKSPACE_X_MIN_M = 0.10
 WORKSPACE_X_MAX_M = 0.75
+
 WORKSPACE_Y_MIN_M = -0.55
 WORKSPACE_Y_MAX_M = +0.55
+
 WORKSPACE_Z_MIN_M = -0.40
 WORKSPACE_Z_MAX_M = 0.65
 ```
+
+이 범위를 벗어난 YOLO 좌표는 IK 실행 전에 차단됩니다.
 
 안전 영역이므로 실제 팔 workspace 확인 없이 무작정 확장하지 않습니다.
 
@@ -462,13 +565,14 @@ WORKSPACE_Z_MAX_M = 0.65
 
 ```python
 REAL_CURRENT_TO_PREALIGN_SEC = 1.2
+
 REAL_APPROACH1_SEC = 6.0*2
 REAL_APPROACH2_SEC = 3.0*2
 REAL_GRASP_TO_LIFT_SEC = 3.0*2
 REAL_GRIPPER_CLOSE_SEC = 3.0*2
 ```
 
-즉:
+즉 현재 계산값:
 
 ```text
 CURRENT -> PREALIGN : 1.2 s
@@ -478,16 +582,36 @@ GRASP -> LIFT       : 6 s
 GRIPPER CLOSE       : 6 s
 ```
 
-**시간값이 작아질수록 팔은 빨라집니다.** 실제 팔에서 속도를 변경할 때는 단계적으로 확인합니다.
+**시간값이 작아질수록 팔은 빨라집니다.**
+
+예:
+
+```python
+REAL_APPROACH1_SEC = 6.0
+```
+
+로 바꾸면 APPROACH1 시간이 12초에서 6초가 됩니다.
+
+실제 팔에서 속도를 변경할 때는 한 번에 크게 줄이지 말고 단계적으로 확인합니다.
 
 ---
 
 # 11. 접근 / Lift 파라미터
 
+같은 파일:
+
+```text
+~/DROK_ARM_IK/tools/interactive_box_ik_grasp_v11.py
+```
+
+현재:
+
 ```python
 NEAR_STANDOFF_M = 0.09
 LIFT_HEIGHT_M = 0.05
 ```
+
+의미:
 
 ```text
 NEAR_STANDOFF_M = 물체 위 9 cm에서 최종 접근 시작
@@ -511,7 +635,12 @@ START_HOME_SEC = 3.0*2
 RETURN_HOME_SEC = 3.0*2
 ```
 
-즉 시작 HOME / 복귀 HOME은 각각 6초입니다.
+즉:
+
+```text
+시작 HOME : 6 s
+복귀 HOME : 6 s
+```
 
 ---
 
@@ -528,12 +657,16 @@ RETURN_HOME_SEC = 3.0*2
 ```python
 GRIPPER_OPEN_GAP_CM = 14.6
 GRIPPER_OPEN_PROTOCOL_DEG = 105.11
+
 GRIPPER_CLOSE_GAP_CM = 9.7
 GRIPPER_CLOSE_PROTOCOL_DEG = 1172.96
+
 GRIPPER_SPEED_DPS = 449
 ```
 
-실물 gripper calibration을 다시 한 경우 실제 저장값을 기준으로 업데이트합니다.
+실물 그리퍼 calibration을 다시 한 경우 반드시 실제 저장값을 기준으로 업데이트합니다.
+
+기계적 끝단에 반복해서 밀어 넣지 않습니다.
 
 ---
 
@@ -548,7 +681,7 @@ local +X = 0.05 m
 
 가 적용되어 있어야 합니다.
 
-확인 파일:
+확인할 파일:
 
 ```text
 ~/DROK_ARM_IK/src/drok_arm_kinematics/config/drok_arm_kinematics_only.urdf
@@ -561,24 +694,54 @@ local +X = 0.05 m
 xyz = [0.05, 0.0, 0.0]
 ```
 
-TCP를 수정했다면:
+TCP를 수정했다면 kinematics package를 다시 빌드합니다.
 
 ```bash
 cd ~/DROK_ARM_IK
+
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-select drok_arm_kinematics
+
+colcon build --symlink-install \
+  --packages-select drok_arm_kinematics
 ```
 
 ---
 
 # 15. 대회 전 토픽 점검
 
+## 실제 팔 feedback
+
 ```bash
 ros2 topic echo /joint_states --once
+```
+
+## YOLO class
+
+```bash
 ros2 topic echo /yolo_detected_object
+```
+
+## YOLO XYZ
+
+```bash
 ros2 topic echo /yolo_object_xyz
+```
+
+## ARM 시작
+
+```bash
 ros2 topic echo /drok_arm_auto/enable
+```
+
+## ARM 완료
+
+```bash
 ros2 topic echo /drok_arm_auto/done
+```
+
+## 차체 최종 command
+
+```bash
 ros2 topic echo /cmd_vel
 ```
 
@@ -586,7 +749,9 @@ ros2 topic echo /cmd_vel
 
 # 16. ARM handshake만 테스트
 
-실제 YOLO를 사용하기 전에 Summer의 ARM handshake만 확인하려면:
+실제 YOLO를 사용하기 전에 Summer의 ARM handshake를 확인할 수 있습니다.
+
+Summer와 ARM node를 켠 상태에서 별도 터미널:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -597,13 +762,13 @@ ros2 topic pub --once \
   "{data: 'supply_box'}"
 ```
 
-Summer 로그에서:
+Summer 로그에:
 
 ```text
 [ARM] supply_box detected. Chassis STOP.
 ```
 
-약 0.5초 후:
+이 나온 뒤 약 0.5초 후:
 
 ```text
 [ARM] Chassis settled. /drok_arm_auto/enable=True published.
@@ -611,29 +776,37 @@ Summer 로그에서:
 
 가 나와야 합니다.
 
-주의: 실제 ARM auto node까지 켜져 있으면 이 신호로 실제 팔이 움직일 수 있습니다.
+주의:
+실제 ARM auto node까지 켜져 있으면 이 신호로 실제 팔 동작이 시작될 수 있으므로
+실물 테스트 시 주변 충돌 여부를 먼저 확인합니다.
 
 ---
 
 # 17. 다시 빌드해야 하는 경우
 
-`src/drokck`의 C++/CMake/package 파일을 수정했다면:
+`summer_node.cpp`, `spring_node.cpp`, `autumn_node.cpp`, `winter_node.cpp`,
+`CMakeLists.txt`, `package.xml`을 수정했다면:
 
 ```bash
 cd ~/KOOKBANG_ARM
+
 source /opt/ros/humble/setup.bash
+
 colcon build --symlink-install
+
 source ~/KOOKBANG_ARM/install/setup.bash
 ```
+
+Python/파라미터만 별도 ARM workspace에서 수정한 경우 해당 변경에 따라 ARM workspace만 다시 빌드하거나 script를 재실행합니다.
 
 ---
 
 # 18. 주의사항
 
-- CAN interface state / bitrate는 Summer 코드에서 변경하지 않습니다.
-- 모터 firmware / ROM 설정을 Summer 코드에서 변경하지 않습니다.
+- CAN interface의 state / bitrate는 이 Summer 코드에서 변경하지 않습니다.
+- 모터 firmware / ROM 설정을 이 코드에서 변경하지 않습니다.
 - ARM 작업 중에는 Summer가 `/cmd_vel=0`을 유지합니다.
 - `/drok_arm_auto/done=True`가 오기 전에는 차량이 자동으로 다시 출발하지 않습니다.
 - 현재 구조는 Summer 실행 한 번당 `supply_box` ARM 미션을 한 번만 수행합니다.
-- 카메라 TF rotation은 실제 장착 자세에 맞춘 최종값이 필요합니다.
+- 카메라 TF rotation은 실제 장착 자세에 맞춘 최종값이 반드시 필요합니다.
 - 대회에서는 `USE_FIXED_PRACTICE_TARGET=False`를 반드시 확인합니다.
