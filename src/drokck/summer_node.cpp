@@ -127,7 +127,7 @@ private:
                 out_msg = current_nav;
             }
 
-            // ARM: 차체 정지 명령 후 0.5초 안정화 시간을 확보한 다음 ARM을 한 번만 시작
+            // ARM: 차체 정지 명령 후 3초 안정화 시간을 확보한 다음 ARM을 한 번만 시작
             if (is_waiting && !arm_started) {
                 double elapsed = (this->now() - wait_start_time).seconds();
 
@@ -190,7 +190,7 @@ private:
     rclcpp::Time wait_start_time;
 
     // ARM: 차체 STOP 이후 ARM 시작까지 대기 시간
-    static constexpr double ARM_CHASSIS_SETTLE_SEC = 0.5;
+    static constexpr double ARM_CHASSIS_SETTLE_SEC = 3.0;
 
     // ARM: enable=True 중복 발행 방지
     bool arm_started = false;
